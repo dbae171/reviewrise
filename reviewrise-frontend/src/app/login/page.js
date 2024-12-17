@@ -30,7 +30,7 @@ export default function LoginPage() {
       setMessage("Login successful! Redirecting...");
       setTimeout(() => {
         router.push("/dashboard"); // Redirect to the dashboard
-      }, 1000); // Small delay for user feedback
+      }, 3000); // Small delay for user feedback
     } catch (err) {
       setMessage(err.message); // Display error message
     }

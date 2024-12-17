@@ -1,54 +1,104 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
-  const [analysis, setAnalysis] = useState("");
+  const [url, setUrl] = useState("");
+  const [analysis, setAnalysis] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const [message, setMessage] = useState("");
   const router = useRouter();
 
-  useEffect(() => {
-    const token = localStorage.getItem("token");
-    if (!token) {
-      router.push("/login"); // Redirect if not logged in
+  const handleAnalyze = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setMessage("");
+    setAnalysis(null);
+
+    try {
+      const response = await fetch("http://127.0.0.1:5000/analyze", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ url }),
+      });
+
+      if (!response.ok) {
+        const data = await response.json();
+        throw new Error(data.error || "Analysis failed");
+      }
+
+      const data = await response.json();
+      setAnalysis(data.analysis); // Store analysis result
+    } catch (err) {
+      setMessage(err.message);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    // Fetch analysis data (mocked here for simplicity)
-    setAnalysis("Here is your business analysis report!");
-  }, [router]);
-
-  const handleDownload = () => {
-    const blob = new Blob([analysis], { type: "text/plain" });
-    const link = document.createElement("a");
-    link.href = URL.createObjectURL(blob);
-    link.download = "business_analysis.txt";
-    link.click();
+  const handleLogout = () => {
+    localStorage.removeItem("token"); // Clear JWT token
+    router.push("/");
   };
 
   return (
-    <div className="min-h-screen bg-gray-100 p-6">
+    <div className="min-h-screen bg-lime-50 p-6">
+      {/* Header */}
       <header className="bg-emerald-400 p-4 text-lime-50 flex justify-between items-center">
         <h1 className="text-2xl font-bold">Dashboard</h1>
         <button
-          onClick={() => {
-            localStorage.removeItem("token"); // Logout
-            router.push("/login");
-          }}
-          className="bg-black text-white px-4 py-2 rounded hover:bg-gray-800"
+          onClick={handleLogout}
+          className="bg-emerald-900 text-lime-50 px-4 py-2 rounded-xl hover:bg-emerald-800"
         >
           Logout
         </button>
       </header>
 
-      <main className="mt-6">
-        <h2 className="text-xl font-bold mb-4">Your Business Analysis</h2>
-        <p className="bg-white p-4 rounded shadow">{analysis}</p>
-        <button
-          onClick={handleDownload}
-          className="mt-4 bg-emerald-400 text-white px-4 py-2 rounded hover:bg-emerald-500"
-        >
-          Download Analysis
-        </button>
+      {/* Main Content */}
+      <main className="text-emerald-900 mt-6">
+        
+        <form onSubmit={handleAnalyze} className="mb-4">
+          <label className="block mb-2">Enter Your Website URL:</label>
+          <input
+            type="url"
+            value={url}
+            onChange={(e) => setUrl(e.target.value)}
+            className="w-full p-2 border rounded mb-4"
+            placeholder="https://yourwebsite.com"
+            required
+          />
+          <button
+            type="submit"
+            className="px-4 py-2 bg-emerald-400 text-lime-50 rounded-lg hover:bg-emerald-500"
+          >
+            Analyze
+          </button>
+        </form>
+
+        {/* Loading State */}
+        {loading && <p className="mt-4 text-emerald-900">🤖 Analyzing your website...</p>}
+
+        {/* Error Message */}
+        {message && <p className="mt-4 text-red-500">{message}</p>}
+
+        {/* Display Analysis Results */}
+        {analysis && (
+          <div className="mt-6 bg-emerald-200 p-4 text-black rounded-xl shadow-md">
+            <h3 className="text-xl font-bold mb-2">Analysis Results</h3>
+            <p><strong>Title:</strong> {analysis.title}</p>
+            <p><strong>Total Word Count:</strong> {analysis.word_count}</p>
+            <p><strong>Website Preview:</strong> {analysis.text_preview}</p>
+
+            {/* New Section for AI-Generated Analysis */}
+            <div className="mt-4">
+              <h4 className="text-lg font-bold mb-2">Analysis Summary</h4>
+              <p className="whitespace-pre-line">{analysis.ai_analysis}</p>
+            </div>
+          </div>
+        )}
       </main>
     </div>
   );

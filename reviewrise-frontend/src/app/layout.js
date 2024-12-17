@@ -13,7 +13,7 @@ const geistMono = Geist_Mono({
 
 export const metadata = {
   title: "Reviewrise",
-  description: "Create an single analysis through all your business",
+  description: "Create an full analysis for your business insight",
 };
 
 export default function RootLayout({ children }) {

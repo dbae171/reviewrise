@@ -1,74 +1,128 @@
-from flask import Flask, jsonify, request
-from flask_sqlalchemy import SQLAlchemy
-from flask_jwt_extended import JWTManager, create_access_token, jwt_required
+from flask import Flask, request, jsonify
 from flask_cors import CORS
+import requests
+from bs4 import BeautifulSoup
+import openai
+import os
+from dotenv import load_dotenv
+from playwright.sync_api import sync_playwright
+
+# Load environment variables from .env
+load_dotenv()
+openai.api_key = os.getenv("OPENAI_API_KEY")
+if not openai.api_key:
+    raise ValueError("OpenAI API key not found. Check your .env file and environment setup.")
 
 app = Flask(__name__)
+CORS(app)  # Enable CORS to allow frontend communication
 
-CORS(app, resources={r"/*": {"origins": "*"}})
-app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///users.db"
-app.config["JWT_SECRET_KEY"] = "your-secret-key"
-db = SQLAlchemy(app)
-jwt = JWTManager(app)
+def fetch_website_content(url):
+    try:
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            page = browser.new_page()
+            page.goto(url, timeout=60000)  # Wait for up to 60 seconds
+            page.wait_for_load_state("networkidle")  # Ensure all content is loaded
+            content_html = page.content()  # Get rendered HTML content
+            browser.close()
 
-class User(db.Model):
-    id = db.Column(db.Integer, primary_key=True)
-    username = db.Column(db.String(80), unique=True, nullable=False)
-    password = db.Column(db.String(120), nullable=False)
+        # Parse content with BeautifulSoup
+        soup = BeautifulSoup(content_html, 'html.parser')
+        content = soup.get_text(separator="\n", strip=True)
+        return content
+    except Exception as e:
+        raise ValueError(f"Failed to load dynamic content: {str(e)}")
 
-@app.route('/')
-def home():
-    return jsonify({"message": "welcome to Reviewrise!"})
+# Health Check Endpoint
+@app.route('/health', methods=['GET'])
+def health():
+    return jsonify({"status": "Server is up and running"}), 200
 
-@app.route("/signup", methods=["POST"])
+# Simple Signup Example
+@app.route('/signup', methods=['POST'])
 def signup():
     data = request.json
-    username = data.get("username")
-    password = data.get("password")
-    business_name = data.get("businessName")
-    business_address = data.get("businessAddress")
+    username = data.get('username')
+    password = data.get('password')
+    # Add logic to save user to database here
+    return jsonify({'message': 'Signup successful'}), 201
 
-    # Check if the user already exists
-    if User.query.filter_by(username=username).first():
-        return jsonify({"message": "User already exists"}), 400
-
-    # Create a new user
-    new_user = User(username=username, password=password)
-    db.session.add(new_user)
-    db.session.commit()
-
-    # Simulate business verification and review fetching
-    # Replace this with actual Google Review API and OpenAI logic
-    analysis = f"Analysis for {business_name} at {business_address}"
-
-    # Save analysis to the database (not implemented yet)
-    print(f"Generated Analysis: {analysis}")
-
-    return jsonify({"message": "Signup successful", "analysis": analysis}), 201
-
-@app.route("/login", methods=["POST"])
+# Simple Login Example
+@app.route('/login', methods=['POST'])
 def login():
     data = request.json
-    user = User.query.filter_by(username=data["username"]).first()
-    if user and user.password == data["password"]:
-        token = create_access_token(identity=user.username)
-        return jsonify({"token": token})
-    return jsonify({"message": "Invalid credentials"}), 401
+    username = data.get('username')
+    password = data.get('password')
+    # Validate user credentials here
+    token = "example_token"  # Replace with JWT generation logic
+    return jsonify({'token': token}), 200
 
-@app.route("/business-info", methods=["POST"])
-def business_info():
-    data = request.json
-    business_name = data.get("businessName")
-    business_address = data.get("businessAddress")
+@app.route('/analyze', methods=['POST'])
+def analyze():
+    try:
+        data = request.json
+        url = data.get('url')
+        if not url:
+            return jsonify({'error': 'URL is required'}), 400
 
-    # Process the data (store it in a database, etc.)
-    print(f"Business Name: {business_name}, Address: {business_address}")
+        # Fetch full website content using Playwright
+        content = fetch_website_content(url)
+        print(f"Fetched Content Length: {len(content)}")  # Debugging
+        print(f"Fetched Content Preview: {content[:1000]}")  # Debugging
 
-    return jsonify({"message": "Business information received"}), 200
+        # Extract meta title
+        meta_title = content.splitlines()[0] if content else 'No title found'
 
+        # Prepare prompt for AI analysis
+        prompt = f"""
+        You are an expert in website content analysis, SEO optimization, and user engagement strategies:
+        You will analyze the following website content in detail and provide the following insights:
+        1. Summary: A short, concise summary of the website content and overall message/theme.
+        2. Readability and User Engagement: 
+            - grade the readability level (flesch-kincaid score)
+            - Suggestions: 
+                - Sentence structure
+                - Paragraph Organization
+                - Word choice improvements
+        3. SEO Strategies: 
+            - Title tags: provide an optimized title tag that improves search ranking
+            - Headings: Suggest proper use of H1, H2, and H3 headings based on the website content
+            - Keyword analysis: point out relavant keywords based on the content and suggest strategic website placement
+            - Meta description: Write a concise, engaging meta description for the page
+            - Image: Suggest alt text for any missing image tags based on the website context
+        4. Content style: 
+            - observe the current tone of the website (professional, conversational, academic, etc)
+            - suggestions for aligning the tone better with intended target audience
 
-if __name__ == "__main__":
+        Content:
+        {content[:8000]}
+        """
+
+        # Call OpenAI API
+        client = openai.OpenAI()
+        response = client.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an expert website content and SEO analyzer."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=700,
+            temperature=0.7
+        )
+
+        ai_analysis = response.choices[0].message.content.strip()
+
+        # Build response
+        analysis = {
+            'title': meta_title,
+            'word_count': len(content.split()),
+            'text_preview': content[:500],  # Improved preview size
+            'ai_analysis': ai_analysis
+        }
+
+        return jsonify({'analysis': analysis})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+if __name__ == '__main__':
     app.run(debug=True)
-    
-with app.app_context():
-    db.create_all()

@@ -49,7 +49,7 @@ export default function HomePage() {
       <footer className="text-lime-50 bg-emerald-400 py-10 ">
         <div className="container mx-auto px-6 pr-11">
           <div className="flex justify-between items-center">
-            <div className="text-sm font-medium">© 2024 Reviewrise.ai</div>
+            <div className="text-sm font-medium">© 2024 Reviewrise</div>
             <div className="space-x-4">
             </div>
           </div>

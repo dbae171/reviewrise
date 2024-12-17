@@ -7,7 +7,7 @@ export default function LoginPage() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [message, setMessage] = useState("");
-  const router = useRouter(); // Used for navigation
+  const router = useRouter();
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -26,13 +26,13 @@ export default function LoginPage() {
       }
 
       const data = await response.json();
-      localStorage.setItem("token", data.token); // Store the JWT token
+      localStorage.setItem("token", data.token); // Storing the JWT token
       setMessage("Login successful! Redirecting...");
       setTimeout(() => {
-        router.push("/dashboard"); // Redirect to the dashboard
-      }, 3000); // Small delay for user feedback
+        router.push("/dashboard"); 
+      }, 3000); 
     } catch (err) {
-      setMessage(err.message); // Display error message
+      setMessage(err.message); 
     }
   };
 

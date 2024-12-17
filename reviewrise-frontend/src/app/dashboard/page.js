@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
@@ -10,6 +10,16 @@ export default function DashboardPage() {
   const [message, setMessage] = useState("");
   const router = useRouter();
 
+  // Check for token on page load
+  useEffect(() => {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      // Redirect to login if no token is found
+      router.push("/login");
+    }
+  }, [router]);
+
+  // Handle the website analysis request
   const handleAnalyze = async (e) => {
     e.preventDefault();
     setLoading(true);
@@ -17,10 +27,14 @@ export default function DashboardPage() {
     setAnalysis(null);
 
     try {
+      const token = localStorage.getItem("token");
+      if (!token) throw new Error("You are not logged in. Please log in first.");
+
       const response = await fetch("http://127.0.0.1:5000/analyze", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
+          Authorization: token, // Pass the token to the backend
         },
         body: JSON.stringify({ url }),
       });
@@ -31,7 +45,7 @@ export default function DashboardPage() {
       }
 
       const data = await response.json();
-      setAnalysis(data.analysis); // Store analysis result
+      setAnalysis(data.analysis);
     } catch (err) {
       setMessage(err.message);
     } finally {
@@ -39,9 +53,10 @@ export default function DashboardPage() {
     }
   };
 
+  // Handle logout
   const handleLogout = () => {
-    localStorage.removeItem("token"); // Clear JWT token
-    router.push("/");
+    localStorage.removeItem("token");
+    router.push("/login");
   };
 
   return (
@@ -59,7 +74,6 @@ export default function DashboardPage() {
 
       {/* Main Content */}
       <main className="text-emerald-900 mt-6">
-        
         <form onSubmit={handleAnalyze} className="mb-4">
           <label className="block mb-2">Enter Your Website URL:</label>
           <input
@@ -88,11 +102,16 @@ export default function DashboardPage() {
         {analysis && (
           <div className="mt-6 bg-emerald-200 p-4 text-black rounded-xl shadow-md">
             <h3 className="text-xl font-bold mb-2">Analysis Results</h3>
-            <p><strong>Title:</strong> {analysis.title}</p>
-            <p><strong>Total Word Count:</strong> {analysis.word_count}</p>
-            <p><strong>Website Preview:</strong> {analysis.text_preview}</p>
+            <p>
+              <strong>Title:</strong> {analysis.title}
+            </p>
+            <p>
+              <strong>Total Word Count:</strong> {analysis.word_count}
+            </p>
+            <p>
+              <strong>Website Preview:</strong> {analysis.text_preview}
+            </p>
 
-            {/* New Section for AI-Generated Analysis */}
             <div className="mt-4">
               <h4 className="text-lg font-bold mb-2">Analysis Summary</h4>
               <p className="whitespace-pre-line">{analysis.ai_analysis}</p>
